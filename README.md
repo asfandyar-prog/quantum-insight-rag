@@ -1,151 +1,257 @@
+<div align="center">
+
 # Quantum Insight RAG
 
-Quantum Insight RAG is a production-deployed Retrieval-Augmented Generation (RAG) system designed to support an Introduction to Quantum Computing course. Unlike generic AI chatbots, this system generates answers strictly grounded in real quantum computing research papers and course materials.
+**A production-deployed Retrieval-Augmented Generation system for quantum computing education**
 
-It combines:
-- Semantic document retrieval
-- Dense vector embeddings
-- Persistent vector storage
-- LLM-based contextual generation
-- Cloud deployment
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
+![Deployed](https://img.shields.io/badge/Status-Production%20Deployed-22c55e?style=flat)
+![RAG](https://img.shields.io/badge/Architecture-RAG-6366f1?style=flat)
+![LangChain](https://img.shields.io/badge/Framework-LangChain-f97316?style=flat)
+![License](https://img.shields.io/badge/License-MIT-0ea5e9?style=flat)
 
-The result is a document-grounded AI assistant tailored for quantum education.
+*Strictly grounded in real quantum computing research papers and course materials — not a generic chatbot.*
 
-## Motivation
-As the instructor of an Introduction to Quantum Computing course, I aimed to:
-- Reduce hallucinated explanations
-- Encourage research-based learning
-- Provide students with an AI assistant grounded in academic materials
-- Bridge AI systems with quantum education
+</div>
 
-This project explores the intersection of AI Systems × Quantum Computing × Intelligent Educational Tools.
+----
 
-## System Architecture
-1. **Document Ingestion**
-   - Supports: .pdf and .txt
-   - Uses PyMuPDFLoader and TextLoader
-   - Automatically detects file types
-   - Adds metadata (source type, content length, index)
+## 📋 Table of Contents
 
-2. **Adaptive Chunking**
-   - PDF files → Larger chunk size
-   - Text files → Smaller chunk size
-   - Custom recursive splitting strategy
-   - Overlap handling for contextual continuity
+- [Overview](#-overview)
+- [System Architecture](#-system-architecture)
+- [RAG Pipeline](#-rag-pipeline)
+- [Repository Structure](#-repository-structure)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Example Queries](#-example-queries)
+- [Design Philosophy](#-design-philosophy)
 
-3. **Embeddings**
-   - Model: all-MiniLM-L6-v2
-   - Normalized embeddings
-   - Batch processing
-   - Efficient inference pipeline
+-----
 
-4. **Vector Database**
-   - ChromaDB persistent storage
-   - Custom collection (quantum_collection)
-   - Metadata-enhanced indexing
-   - Cosine similarity retrieval
+## 🧠 Overview
 
-5. **Retriever**
-   - Top-k semantic search
-   - Distance-to-similarity conversion
-   - Threshold filtering
-   - Ranked contextual retrieval
+**Quantum Insight RAG** is a document-grounded AI assistant purpose-built for an *Introduction to Quantum Computing* course. It answers questions strictly from retrieved content — research papers and course materials — never from the model’s parametric memory alone.
 
-6. **LLM Layer**
-   - Model: LLaMA 3.3 (70B) via Groq
-   - Strict context-based answering
-   - Hallucination control
-   - Concise, technically precise outputs
+|Problem                              |Solution                                              |
+|-------------------------------------|------------------------------------------------------|
+|LLMs hallucinate quantum concepts    |Answers grounded in retrieved source documents        |
+|Generic chatbots lack course context |Embeddings built from actual course materials         |
+|Students get low-quality explanations|Semantic retrieval surfaces the most relevant passages|
+|AI-generated content hard to verify  |Every answer traceable back to a source chunk         |
 
-7. **Deployment**
-   - Hosted on Streamlit Cloud
-   - Python runtime configured
-   - Production-ready requirements
-   - Secret management via Streamlit Secrets
 
-## Tech Stack
-- Python 3.10
-- Streamlit
-- LangChain
-- ChromaDB
-- Sentence-Transformers
-- Groq (LLaMA 3.3-70B)
-- PyMuPDF
-- NumPy
+> *Intersection of AI Systems × Quantum Computing × Intelligent Educational Tools*
 
-## Example Use Cases
-The system can answer questions such as:
-- What is superposition in quantum mechanics?
-- Explain Pauli-X gate using matrix representation.
-- What is the Bernstein–Vazirani algorithm?
-- How does measurement collapse the quantum state?
-- Explain entanglement using tensor product notation.
+-----
 
-All answers are generated only from ingested documents. If information is not present in the dataset, the system responds: "I don't know based on the provided documents."
+## 🏗 System Architecture
 
-## Project Structure
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     INGESTION PIPELINE                      │
+│                                                             │
+│  PDF / TXT files                                            │
+│       │                                                     │
+│       ▼                                                     │
+│  PyMuPDFLoader / TextLoader  (auto file-type detection)     │
+│       │                                                     │
+│       ▼                                                     │
+│  RecursiveCharacterTextSplitter  (chunk + overlap)          │
+│       │                                                     │
+│       ▼                                                     │
+│  HuggingFace Embeddings  (dense vector encoding)            │
+│       │                                                     │
+│       ▼                                                     │
+│  ChromaDB  (persistent vector store)                        │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       QUERY PIPELINE                        │
+│                                                             │
+│  User question                                              │
+│       │                                                     │
+│       ▼                                                     │
+│  Embed query  →  Similarity search (ChromaDB)               │
+│       │                                                     │
+│       ▼                                                     │
+│  Top-k relevant chunks retrieved                            │
+│       │                                                     │
+│       ▼                                                     │
+│  Prompt = context chunks + user question                    │
+│       │                                                     │
+│       ▼                                                     │
+│  LLM (Groq / OpenAI)  →  Grounded answer                   │
+└─────────────────────────────────────────────────────────────┘
+```
 
+-----
+
+## 🔄 RAG Pipeline
+
+### 1. Document Ingestion
+
+```python
+# Auto-detects file type and loads accordingly
+if file.endswith(".pdf"):
+    loader = PyMuPDFLoader(file_path)
+elif file.endswith(".txt"):
+    loader = TextLoader(file_path)
+
+docs = loader.load()
+```
+
+### 2. Chunking & Embedding
+
+```python
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50
+)
+chunks = splitter.split_documents(docs)
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+```
+
+### 3. Persistent Vector Storage
+
+```python
+vectorstore = Chroma.from_documents(
+    documents=chunks,
+    embedding=embeddings,
+    persist_directory="./data/chroma_db"
+)
+vectorstore.persist()
+```
+
+### 4. Retrieval & Generation
+
+```python
+retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+
+chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=retriever,
+    return_source_documents=True
+)
+
+result = chain({"query": user_question})
+```
+
+-----
+
+## 📁 Repository Structure
+
+```
 quantum-insight-rag/
 │
-├── app.py                  # Streamlit frontend
-├── main.py                 # RAG pipeline backend
-├── data/                   # PDFs and text documents
-├── requirements.txt        # Deployment dependencies
-├── runtime.txt             # Python version control
-└── README.md
+├── app.py                # Streamlit web interface
+├── main.py               # RAG pipeline core logic
+├── requirements.txt      # Python dependencies
+├── runtime.txt           # Python runtime version (Render/Heroku)
+├── .gitignore
+│
+└── data/                 # Document corpus
+    ├── papers/           # Quantum computing research papers (.pdf)
+    ├── notes/            # Course materials (.txt / .pdf)
+    └── chroma_db/        # Persistent vector store (auto-generated)
+```
 
-## Local Setup
-1. Clone Repository
+-----
+
+## 🛠 Tech Stack
+
+|Layer               |Technology                                          |
+|--------------------|----------------------------------------------------|
+|**Frontend**        |Streamlit                                           |
+|**RAG Framework**   |LangChain                                           |
+|**Embeddings**      |HuggingFace `sentence-transformers/all-MiniLM-L6-v2`|
+|**Vector Store**    |ChromaDB (persistent)                               |
+|**Document Loading**|PyMuPDF · LangChain TextLoader                      |
+|**LLM**             |Groq API / OpenAI                                   |
+|**Deployment**      |Cloud (Render / Streamlit Cloud)                    |
+|**Language**        |Python 3.11+                                        |
+
+-----
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- A Groq or OpenAI API key
+
+### Installation
+
+```bash
 git clone https://github.com/asfandyar-prog/quantum-insight-rag.git
 cd quantum-insight-rag
-text2. Create Virtual Environment
-python -m venv .venv
-source .venv/bin/activate   # macOS/Linux
-.venv\Scripts\activate      # Windows
-text3. Install Dependencies
 pip install -r requirements.txt
-text4. Add Environment Variables  
-Create .env file:
-GROQ_API_KEY=your_groq_api_key
-text5. Run Application
+```
+
+### Configuration
+
+```bash
+# Create a .env file
+echo "GROQ_API_KEY=your_key_here" > .env
+# or
+echo "OPENAI_API_KEY=your_key_here" > .env
+```
+
+### Ingest your documents
+
+```bash
+# Drop PDFs or TXT files into data/
+python main.py --ingest
+```
+
+### Run the app
+
+```bash
 streamlit run app.py
-text## Deployment
-The application is deployed and live on Streamlit Cloud with:
-- Python 3.10 runtime
-- Secrets management
-- Production embedding indexing
-- Persistent vector storage
+```
 
-**Live Demo**: [Quantum Insight RAG](https://quantum-insight-rag-uevzvmkpjuczl7lvz5xmw.streamlit.app)
+-----
 
-## Engineering Challenges Solved
-- Python 3.13 incompatibility with Torch
-- Dependency conflicts in cloud deployment
-- Secret scanning and push protection
-- Vector store persistence issues
-- Dynamic chunking optimization
-- Clean separation of frontend and backend logic
+## 💬 Example Queries
 
-## Future Improvements
-- Citation display per answer
-- Source filtering (PDF vs Notes)
-- Hybrid search (keyword + vector)
-- Multi-model support
-- Evaluation harness (Faithfulness / Relevancy scoring)
-- Quantum algorithm visualization integration
+```
+"What is quantum superposition?"
+→ Retrieved from: lecture_week2.pdf, nielsen_chuang_ch2.pdf
 
-## About the Author
-Asfand Yar  
-BSc Computer Science (Minor in Physics)  
-Instructor – Introduction to Quantum Computing  
-AI Systems & RAG Engineer  
+"Explain Shor's algorithm step by step."
+→ Retrieved from: shors_algorithm_paper.pdf, course_notes_week6.txt
 
-Interests:  
-- AI Engineering  
-- Retrieval-Augmented Generation  
-- ML Infrastructure  
-- Quantum Computing  
-- AI in Education  
+"What are the main sources of quantum decoherence?"
+→ Retrieved from: decoherence_review.pdf, lab_notes.txt
+```
 
-## License
-This project is for educational and research purposes. Licensed under the MIT License.
+Every answer cites which document chunks were retrieved — students can trace the source.
+
+-----
+
+## 🏗 Design Philosophy
+
+**Grounding over generation.** The system is constrained to answer from retrieved context only. If the answer isn’t in the document corpus, it says so — rather than hallucinating.
+
+**Education-first.** Built specifically for a quantum computing course, not adapted from a generic chatbot. The document corpus, chunking strategy, and prompt design are all tuned for academic content.
+
+**Production-deployed.** Not a notebook demo. Deployed with a persistent vector store, a web interface, and a cloud runtime — ready for real student use.
+
+-----
+
+## 👤 Author
+
+**Asfand Yar** · BSc Computer Science
+Focus: agentic AI · self-supervised learning · vision transformers · robustness under distribution shift
+
+-----
+
+<div align="center">
+
+MIT License · [asfandyar-prog](https://github.com/asfandyar-prog)
+
+</div>
